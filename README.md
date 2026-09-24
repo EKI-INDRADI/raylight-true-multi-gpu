@@ -4,6 +4,51 @@ Raylight. Using Ray Worker to manage multi GPU sampler setup. With XDiT-XFuser a
 
 *"Why buy 5090 when you can buy 2x5070s"-Komikndr*
 
+# NOTE :
+```sh
+#singkatnya
+
+Sequence Parallel =  kinerja 2x gpu ( jika pada single gpu memenuhi model)
+
+FSDP  = membagi model besar ke vram ( jika model tidak cukup 1 vram gpu )
+
+Sequence + FSDP  = kinerja 2x gpu + membagi model besar ke vram  (sesuai sisa attention) 
+
+
+
+
+Secara umum **konsep dan logika dasar yang kamu simpulkan sudah sangat tepat!** ringkasan ringkas untuk memperjelas batasannya:
+
+### 1. Sequence Parallelism (Ulysses / Ring)
+
+* **Status VRAM:** Cukup untuk menampung model di 1 GPU.
+* **Fungsi Utama:** Membagi kalkulasi *Attention* (frame video / resolusi gambar) ke seluruh GPU.
+* **Hasil Kinerja:** **Mendekati 2x lebih cepat** (tergantung kecepatan jalur PCIe/NVLink antar GPU).
+
+---
+
+### 2. FSDP (Fully Sharded Data Parallel)
+
+* **Status VRAM:** Model terlalu besar, tidak muat di 1 GPU (misal: VRAM 12GB ingin memuat model 24GB).
+* **Fungsi Utama:** Memecah (*shard*) bobot model ke VRAM GPU 1 dan GPU 2.
+* **Hasil Kinerja:** **Model bisa berjalan (tidak OOM)**, namun kecepatannya *bisa lebih lambat dari single GPU* karena ada *overhead* transfer bobot terus-menerus antar GPU saat *inference*.
+
+---
+
+### 3. Sequence Parallel + FSDP
+
+* **Status VRAM:** Model tidak cukup di 1 GPU **DAN** kalkulasi *Attention* (durasi video/resolusi) juga sangat tinggi.
+* **Fungsi Utama:** FSDP bertugas menyelamatkan VRAM agar model bisa dimuat, sedangkan Sequence Parallelism bertugas membagi beban komputasi *Attention*-nya.
+* **Hasil Kinerja:** **Bisa menjalankan model jumbo + sekuens panjang tanpa OOM**. Kecepatannya jauh lebih optimal dibanding FSDP biasa, tetapi tidak murni 2x lebih cepat karena FSDP masih menyumbang sedikit beban komunikasi data.
+
+---
+
+> **Aturan Praktis (Rule of Thumb):**
+> * Ingin **kecepatan maksimal**? Gunakan **Sequence Parallel Saja** (FSDP = OFF).
+> * Ingin **muat model raksasa**? Gunakan **FSDP** (tambahkan Sequence Parallel jika membuat video/resolusi tinggi).
+> 
+>
+```
 
 ## UPDATE
 
